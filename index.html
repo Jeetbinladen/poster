@@ -100,6 +100,10 @@
             border: 1px solid rgba(197,160,89,0.3);
         }
     </style>
+    
+    <!-- Using unpkg as alternative CDN (more reliable than jsdelivr in some regions) -->
+    <script src="https://unpkg.com/aframe@1.4.0/dist/aframe.min.js"></script>
+    <script src="https://unpkg.com/mind-ar@1.2.0/dist/mindar-image-aframe.prod.js"></script>
 </head>
 <body>
     <div id="loading-indicator">Loading AR libraries...</div>
@@ -145,8 +149,8 @@
             const errorBox = document.getElementById('error-box');
             const loadingIndicator = document.getElementById('loading-indicator');
             
-            let mindarReady = false;
-            let aframeReady = false;
+            let scriptsLoaded = false;
+            let loadAttempts = 0;
             
             function hideLoading() {
                 if (loadingIndicator) {
@@ -175,18 +179,19 @@
                 console.log('[Status]', msg);
             }
             
-            function checkLibrariesReady() {
-                if (mindarReady && aframeReady) {
-                    console.log('Both libraries ready');
+            function checkReady() {
+                if (scriptsLoaded && sceneEl && sceneEl.components && sceneEl.components['mindar-image']) {
                     updateStatus('Ready. Tap START AR to begin.');
                     hideLoading();
                     showStartButton();
+                    return true;
                 }
+                return false;
             }
             
             async function startAR() {
-                if (!mindarReady) {
-                    updateStatus('AR libraries still loading. Please wait.', true);
+                if (!scriptsLoaded) {
+                    updateStatus('Libraries still loading. Please wait.', true);
                     return;
                 }
                 
@@ -207,51 +212,37 @@
                     
                     updateStatus('Starting AR...');
                     
-                    setTimeout(() => {
+                    const mindarImage = sceneEl.components['mindar-image'];
+                    
+                    if (mindarImage && typeof mindarImage.start === 'function') {
                         try {
-                            const mindarImage = sceneEl.components['mindar-image'];
+                            await mindarImage.start();
+                            updateStatus('Camera active. Scan your poster.');
+                            startButton.classList.add('hidden');
+                            startButton.style.display = 'none';
                             
-                            if (mindarImage && typeof mindarImage.start === 'function') {
-                                mindarImage.start().then(() => {
-                                    updateStatus('Camera active. Scan your poster.');
-                                    startButton.classList.add('hidden');
-                                    startButton.style.display = 'none';
-                                    
-                                    sceneEl.addEventListener('targetFound', () => {
-                                        updateStatus('Poster detected. Model loading.');
-                                        if (navigator.vibrate) navigator.vibrate(50);
-                                        setTimeout(() => {
-                                            if (statusDiv.innerHTML.includes('detected')) {
-                                                updateStatus('Radio floating above poster.');
-                                            }
-                                        }, 2000);
-                                    });
-                                    
-                                    sceneEl.addEventListener('targetLost', () => {
-                                        updateStatus('Poster lost. Reposition camera.');
-                                    });
-                                    
-                                }).catch(err => {
-                                    console.error('MindAR start error:', err);
-                                    showError('AR start failed: ' + err.message);
-                                    updateStatus('AR failed. Refresh and try again.', true);
-                                    startButton.classList.remove('hidden');
-                                    startButton.style.display = 'block';
-                                });
-                            } else {
-                                throw new Error('MindAR component not available. Refresh the page.');
-                            }
+                            sceneEl.addEventListener('targetFound', () => {
+                                updateStatus('Poster detected. Model loading.');
+                                if (navigator.vibrate) navigator.vibrate(50);
+                            });
+                            
+                            sceneEl.addEventListener('targetLost', () => {
+                                updateStatus('Poster lost. Reposition camera.');
+                            });
+                            
                         } catch (err) {
-                            console.error('MindAR error:', err);
-                            showError(err.message);
-                            updateStatus('AR component error. Refresh page.', true);
+                            console.error('MindAR start error:', err);
+                            showError('AR start failed: ' + err.message);
+                            updateStatus('AR failed. Refresh and try again.', true);
                             startButton.classList.remove('hidden');
                             startButton.style.display = 'block';
                         }
-                    }, 100);
+                    } else {
+                        throw new Error('MindAR component not available.');
+                    }
                     
                 } catch (err) {
-                    console.error('Camera permission error:', err);
+                    console.error('Camera error:', err);
                     
                     if (err.name === 'NotAllowedError') {
                         const msg = 'Camera permission denied. Go to Settings > Safari > Camera > Allow.';
@@ -269,31 +260,34 @@
                 }
             }
             
-            // Detect when MindAR is ready
-            const checkMindAR = setInterval(() => {
-                if (sceneEl && sceneEl.components && sceneEl.components['mindar-image']) {
-                    mindarReady = true;
-                    clearInterval(checkMindAR);
-                    checkLibrariesReady();
-                }
-            }, 200);
-            
-            // Timeout for MindAR loading
-            setTimeout(() => {
-                if (!mindarReady) {
-                    clearInterval(checkMindAR);
+            // Monitor for MindAR component
+            const interval = setInterval(() => {
+                loadAttempts++;
+                if (checkReady()) {
+                    clearInterval(interval);
+                } else if (loadAttempts > 50) {
+                    clearInterval(interval);
                     updateStatus('AR libraries failed to load. Check internet connection.', true);
                     hideLoading();
                     showStartButton();
-                    showError('MindAR failed to load. Please refresh the page and ensure you have an internet connection.');
+                    showError('Failed to load AR libraries. Please refresh the page and ensure you have an internet connection.');
                 }
-            }, 10000);
+            }, 200);
             
-            // AFrame ready event
+            // Mark scripts as loaded when AFrame is ready
             window.addEventListener('load', () => {
-                aframeReady = true;
-                checkLibrariesReady();
+                setTimeout(() => {
+                    scriptsLoaded = true;
+                    checkReady();
+                }, 500);
             });
+            
+            // Fallback: if page is taking too long
+            setTimeout(() => {
+                if (!scriptsLoaded && loadingIndicator) {
+                    updateStatus('Slow connection. Libraries still loading...');
+                }
+            }, 5000);
             
             if (startButton) {
                 startButton.addEventListener('click', startAR);
@@ -301,19 +295,11 @@
             
             window.addEventListener('error', (e) => {
                 console.error('Global error:', e.error);
-                if (!startButton.classList.contains('hidden')) {
-                    updateStatus('Page error. Refresh and try again.', true);
+                if (e.message && e.message.includes('Script error')) {
+                    updateStatus('Network issue. Check internet connection.', true);
                 }
             });
         })();
     </script>
-    
-    <!-- Load scripts dynamically with error handling -->
-    <script src="https://aframe.io/releases/1.4.0/aframe.min.js" 
-            onload="console.log('AFrame loaded')" 
-            onerror="console.error('AFrame failed to load')"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.0/dist/mindar-image-aframe.prod.js" 
-            onload="console.log('MindAR loaded')" 
-            onerror="console.error('MindAR failed to load')"></script>
 </body>
 </html>
