@@ -3,44 +3,238 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Memorial AR - Simple Version</title>
-    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-nft.js"></script>
+    <title>Memorial of the World Around - AR</title>
     <style>
-        body { margin: 0; overflow: hidden; font-family: system-ui; }
-        .info { position: fixed; bottom: 20px; left: 0; right: 0; text-align: center; color: gold; background: rgba(0,0,0,0.6); padding: 10px; z-index: 100; font-size: 14px; pointer-events: none; }
-        button { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); z-index: 200; padding: 12px 24px; background: #c5a059; color: black; border: none; border-radius: 30px; font-weight: bold; font-size: 16px; cursor: pointer; }
+        body { margin: 0; overflow: hidden; font-family: system-ui; background: #000; }
+        
+        #controls {
+            position: fixed;
+            bottom: 30px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            z-index: 200;
+            pointer-events: none;
+        }
+        
+        #start-btn {
+            pointer-events: auto;
+            background: #c5a059;
+            color: #000;
+            border: none;
+            padding: 14px 32px;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 50px;
+            cursor: pointer;
+            font-family: monospace;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            transition: transform 0.1s ease;
+        }
+        
+        #start-btn:active { transform: scale(0.96); }
+        
+        #status {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(8px);
+            color: #c5a059;
+            padding: 12px;
+            border-radius: 12px;
+            text-align: center;
+            font-size: 12px;
+            z-index: 200;
+            font-family: monospace;
+            border: 1px solid rgba(197,160,89,0.3);
+            pointer-events: none;
+        }
+        
+        .instruction {
+            position: fixed;
+            bottom: 110px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            color: rgba(255,255,255,0.5);
+            font-size: 11px;
+            z-index: 200;
+            pointer-events: none;
+        }
+        
+        a-scene { width: 100%; height: 100%; }
+        .hidden { display: none; }
+        
+        /* Error box */
+        #error-box {
+            position: fixed;
+            bottom: 180px;
+            left: 20px;
+            right: 20px;
+            background: rgba(255,50,50,0.9);
+            color: white;
+            padding: 12px;
+            border-radius: 12px;
+            text-align: center;
+            font-size: 12px;
+            z-index: 300;
+            display: none;
+            backdrop-filter: blur(8px);
+        }
     </style>
+    
+    <!-- MindAR + AFrame -->
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.0/dist/mindar-image-aframe.prod.js"></script>
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
 </head>
 <body>
-    <button id="start">📷 START CAMERA</button>
-    <div class="info" id="status">⚠️ Tap START CAMERA</div>
-    
-    <a-scene id="scene" embedded arjs="sourceType: webcam; debugUIEnabled: false;">
-        <a-nft type="nft" url="marker.patt" smooth="true" smoothCount="10" smoothTolerance="0.01" smoothThreshold="5">
-            <a-entity gltf-model="radio1.glb" scale="0.3 0.3 0.3" position="0 0 0" rotation="0 180 0"></a-entity>
-        </a-nft>
-        <a-entity camera></a-entity>
-    </a-scene>
-    
-    <script>
-        const startBtn = document.getElementById('start');
-        const scene = document.getElementById('scene');
-        const statusDiv = document.getElementById('status');
+    <div id="controls">
+        <button id="start-btn">📷 START AR</button>
+    </div>
+    <div id="status">
+        ⚡ Tap "START AR" to begin
+    </div>
+    <div class="instruction">
+        🖼️ Point camera at the MEMORIAL OF THE WORLD AROUND poster
+    </div>
+    <div id="error-box"></div>
+
+    <a-scene id="scene" 
+             mindar-image="imageTargetSrc: marker.patt; autoStart: false; uiLoading: false; uiError: false;" 
+             vr-mode-ui="enabled: false" 
+             device-orientation-permission-ui="enabled: false" 
+             embedded>
         
-        startBtn.addEventListener('click', async () => {
+        <a-assets>
+            <a-asset-item id="assets-model" src="assets.glb"></a-asset-item>
+        </a-assets>
+        
+        <a-entity mindar-image-target="targetIndex: 0">
+            <a-entity gltf-model="#assets-model"
+                      scale="0.5 0.5 0.5"
+                      position="0 0.2 0"
+                      rotation="0 180 0">
+            </a-entity>
+            <a-light type="point" color="#c5a059" intensity="0.5" distance="2" position="0 0.5 0"></a-light>
+        </a-entity>
+        
+        <a-entity camera="active: true" look-controls></a-entity>
+    </a-scene>
+
+    <script>
+        const startButton = document.getElementById('start-btn');
+        const sceneEl = document.getElementById('scene');
+        const statusDiv = document.getElementById('status');
+        const errorBox = document.getElementById('error-box');
+        
+        function showError(msg) {
+            errorBox.textContent = msg;
+            errorBox.style.display = 'block';
+            statusDiv.innerHTML = '❌ ' + msg.substring(0, 60);
+            setTimeout(() => {
+                errorBox.style.display = 'none';
+            }, 8000);
+        }
+        
+        async function startAR() {
             statusDiv.innerHTML = '📷 Requesting camera...';
+            statusDiv.style.color = '#ffd966';
+            
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-                stream.getTracks().forEach(t => t.stop());
-                scene.setAttribute('arjs', 'sourceType', 'webcam');
-                scene.components['arjs'].start();
-                statusDiv.innerHTML = '✅ Camera active. Point at poster!';
-                startBtn.style.display = 'none';
+                // Step 1: Request camera permission explicitly
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "environment" } 
+                });
+                
+                // Step 2: Verify we got a real video track
+                const videoTracks = stream.getVideoTracks();
+                if (videoTracks.length === 0) {
+                    throw new Error('No video track found');
+                }
+                
+                console.log('Camera granted:', videoTracks[0].label);
+                
+                // Step 3: Stop the temp stream
+                stream.getTracks().forEach(track => track.stop());
+                
+                statusDiv.innerHTML = '✅ Camera ready. Starting AR...';
+                
+                // Step 4: Small delay before starting MindAR (critical for iOS)
+                setTimeout(async () => {
+                    try {
+                        const mindarImage = sceneEl.components['mindar-image'];
+                        if (!mindarImage) {
+                            throw new Error('MindAR not loaded. Refresh page.');
+                        }
+                        
+                        await mindarImage.start();
+                        statusDiv.innerHTML = '🔍 Camera active. Scan your poster!';
+                        statusDiv.style.color = '#c5a059';
+                        startButton.classList.add('hidden');
+                        
+                        // Detection feedback
+                        sceneEl.addEventListener('targetFound', () => {
+                            statusDiv.innerHTML = '✨ POSTER DETECTED! ✨';
+                            statusDiv.style.color = '#ffd700';
+                            // Haptic feedback if supported
+                            if (navigator.vibrate) navigator.vibrate(50);
+                            setTimeout(() => {
+                                if (statusDiv.innerHTML.includes('DETECTED')) {
+                                    statusDiv.innerHTML = '🎧 Radio floating above poster';
+                                }
+                            }, 2000);
+                        });
+                        
+                        sceneEl.addEventListener('targetLost', () => {
+                            statusDiv.innerHTML = '🔍 Move camera to show poster';
+                            statusDiv.style.color = '#c5a059';
+                        });
+                        
+                    } catch (err) {
+                        console.error('MindAR start error:', err);
+                        showError('AR engine failed: ' + err.message);
+                        statusDiv.innerHTML = '❌ AR failed. Refresh and try again.';
+                        startButton.classList.remove('hidden');
+                    }
+                }, 100);
+                
             } catch (err) {
-                statusDiv.innerHTML = '❌ Camera error: ' + err.message;
-                alert('Go to Settings → Safari → Camera → Allow');
+                console.error('Camera permission error:', err);
+                statusDiv.style.color = '#ff8888';
+                
+                if (err.name === 'NotAllowedError') {
+                    const msg = 'Camera permission denied. Go to Settings → Safari → Camera → Allow. Then refresh.';
+                    showError(msg);
+                    statusDiv.innerHTML = '❌ Camera denied. Check Safari settings.';
+                } else if (err.name === 'NotFoundError') {
+                    showError('No camera found on this device.');
+                } else {
+                    showError('Camera error: ' + err.message);
+                }
+                startButton.classList.remove('hidden');
             }
+        }
+        
+        // Handle page visibility changes (iOS sometimes kills camera when backgrounded)
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && !startButton.classList.contains('hidden')) {
+                // Page came back to foreground, camera might need restart
+                console.log('Page visible again');
+            }
+        });
+        
+        startButton.addEventListener('click', startAR);
+        
+        // Check if camera is already blocked at browser level
+        navigator.mediaDevices.enumerateDevices().then(devices => {
+            const hasCamera = devices.some(d => d.kind === 'videoinput');
+            if (!hasCamera) {
+                statusDiv.innerHTML = '⚠️ No camera detected on this device';
+            }
+        }).catch(() => {
+            // Ignore - will be caught in startAR
         });
     </script>
 </body>
