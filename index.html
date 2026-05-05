@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Memorial of the World Around - AR</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: system-ui; background: #000; }
+        #controls { position: fixed; bottom: 30px; left: 0; right: 0; text-align: center; z-index: 200; }
+        #start-btn { background: #c5a059; color: #000; border: none; padding: 14px 32px; font-size: 16px; font-weight: 600; border-radius: 40px; cursor: pointer; }
+        #status { position: fixed; top: 20px; left: 20px; right: 20px; background: rgba(0,0,0,0.85); color: #c5a059; padding: 12px; border-radius: 8px; text-align: center; font-size: 12px; z-index: 200; }
+        .instruction { position: fixed; bottom: 110px; left: 0; right: 0; text-align: center; color: rgba(255,255,255,0.5); font-size: 11px; z-index: 200; }
+        a-scene { width: 100%; height: 100%; }
+        .hidden { display: none; }
+    </style>
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.0/dist/mindar-image-aframe.prod.js"></script>
+</head>
+<body>
+    <div id="controls">
+        <button id="start-btn">START AR</button>
+    </div>
+    <div id="status">Ready. Tap START AR to begin.</div>
+    <div class="instruction">Point camera at the Memorial of the World Around poster</div>
+
+    <a-scene id="scene" 
+             mindar-image="imageTargetSrc: ./targets.mind; autoStart: false; uiLoading: no; uiError: no; uiScanning: no;"
+             vr-mode-ui="enabled: false" 
+             device-orientation-permission-ui="enabled: false" 
+             embedded>
+        
+        <a-assets>
+            <a-asset-item id="radio-model" src="./asset.glb"></a-asset-item>
+        </a-assets>
+        
+        <a-entity id="target-entity" mindar-image-target="targetIndex: 0">
+            <a-entity gltf-model="#radio-model"
+                      scale="0.5 0.5 0.5"
+                      position="0 0.2 0"
+                      rotation="0 180 0">
+            </a-entity>
+        </a-entity>
+        
+        <a-entity camera="active: true" look-controls></a-entity>
+    </a-scene>
+
+    <script>
+        const startButton = document.getElementById('start-btn');
+        const sceneEl = document.getElementById('scene');
+        const statusDiv = document.getElementById('status');
+        const targetEntity = document.getElementById('target-entity');
+
+        let arStarted = false;
+
+        // MindAR fires this when it's fully ready
+        sceneEl.addEventListener('arReady', async () => {
+            if (!arStarted) return; // only start if user clicked the button
+            statusDiv.innerHTML = 'Starting camera...';
+            try {
+                await sceneEl.components['mindar-image'].start();
+                statusDiv.innerHTML = '📷 Camera active — point at your poster!';
+            } catch (err) {
+                statusDiv.innerHTML = '❌ ' + err.message;
+                startButton.classList.remove('hidden');
+            }
+        });
+
+        sceneEl.addEventListener('arError', (e) => {
+            statusDiv.innerHTML = '❌ AR Error: ' + (e.detail || 'unknown');
+            startButton.classList.remove('hidden');
+        });
+
+        targetEntity.addEventListener('targetFound', () => {
+            statusDiv.innerHTML = '✅ Poster detected! Enjoy the experience.';
+        });
+
+        targetEntity.addEventListener('targetLost', () => {
+            statusDiv.innerHTML = '🔍 Poster lost — reposition your camera.';
+        });
+
+        async function startAR() {
+            startButton.classList.add('hidden');
+            arStarted = true;
+            statusDiv.innerHTML = 'Requesting camera access...';
+
+            try {
+                // Pre-check camera permission
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "environment" } 
+                });
+                stream.getTracks().forEach(track => track.stop());
+                statusDiv.innerHTML = 'Loading AR engine — please wait...';
+
+                // If arReady already fired before button click, start immediately
+                const mindarImage = sceneEl.components['mindar-image'];
+                if (mindarImage && typeof mindarImage.start === 'function') {
+                    statusDiv.innerHTML = 'Starting camera...';
+                    await mindarImage.start();
+                    statusDiv.innerHTML = '📷 Camera active — point at your poster!';
+                }
+                // Otherwise arReady event above will trigger it
+
+            } catch (err) {
+                statusDiv.innerHTML = '❌ ' + err.message;
+                startButton.classList.remove('hidden');
+                arStarted = false;
+                console.error(err);
+            }
+        }
+
+        startButton.addEventListener('click', startAR);
+    </script>
+</body>
+</html>
