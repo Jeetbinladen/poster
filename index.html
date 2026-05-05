@@ -49,16 +49,43 @@
         const sceneEl = document.getElementById('scene');
         const statusDiv = document.getElementById('status');
         
+        // Wait for MindAR to be ready before exposing start function
+        function waitForMindAR() {
+            return new Promise((resolve) => {
+                const checkInterval = setInterval(() => {
+                    const mindarImage = sceneEl.components['mindar-image'];
+                    if (mindarImage && typeof mindarImage.start === 'function') {
+                        clearInterval(checkInterval);
+                        resolve(mindarImage);
+                    }
+                }, 100);
+                
+                // Timeout after 10 seconds
+                setTimeout(() => {
+                    clearInterval(checkInterval);
+                    resolve(null);
+                }, 10000);
+            });
+        }
+        
         async function startAR() {
             statusDiv.innerHTML = 'Requesting camera access...';
             
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "environment" } 
+                });
                 stream.getTracks().forEach(track => track.stop());
                 
-                statusDiv.innerHTML = 'Starting AR...';
+                statusDiv.innerHTML = 'Waiting for AR engine...';
                 
-                const mindarImage = sceneEl.components['mindar-image'];
+                const mindarImage = await waitForMindAR();
+                
+                if (!mindarImage) {
+                    throw new Error('AR engine did not load. Please refresh the page.');
+                }
+                
+                statusDiv.innerHTML = 'Starting AR...';
                 await mindarImage.start();
                 
                 statusDiv.innerHTML = 'Camera active. Scan your poster.';
@@ -75,6 +102,7 @@
             } catch (err) {
                 statusDiv.innerHTML = 'Error: ' + err.message;
                 console.error(err);
+                startButton.classList.remove('hidden');
             }
         }
         
